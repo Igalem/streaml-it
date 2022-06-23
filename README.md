@@ -2,6 +2,10 @@
   <img src="_static/logo.png" height="250">
 </p>
 
+<p align="center" width="100%">
+  <img src="_static/snowflake_csv_loader.jpg" height="350">
+</p>
+
 # Streaml-it
 Streamlit applications project
 

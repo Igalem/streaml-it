@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import snowflake.connector
 
+
 def snowflake_connector(user, password, account, region, database, schema):
     snowflakeClient = snowflake.connector.connect(
         user = user,
@@ -14,38 +15,47 @@ def snowflake_connector(user, password, account, region, database, schema):
         )
     return snowflakeClient
 
+# ===================================================== Streamlit Configuration
+st.set_page_config(
+     page_title="CSV Loader",
+     page_icon="🧊",
+     layout="centered",
+     initial_sidebar_state="expanded",
+     menu_items={
+         'Get Help': 'https://github.com/Igalem/streaml-it',
+         'Report a bug': "https://github.com/Igalem/streaml-it",
+         'About': "# CSV Loader to Snowflake *\n*Use this app to load your CSV file into Snowflake DB.*"
+     }
+ )
+
 header = st.container()
 body = st.container()
 
 st.sidebar.subheader('Connection details configuration')
 st.sidebar.caption('Fill here your environment connection details')
-
 st_user = st.sidebar.text_input('', placeholder='Username')
 st_password  = st.sidebar.text_input('', placeholder='Password', type='password')
 st_account  = st.sidebar.text_input('', placeholder='Account')
 st_region  = st.sidebar.text_input('', placeholder='Region')
 st_db  = st.sidebar.text_input('', placeholder='Database')
 st_schema  = st.sidebar.text_input('', placeholder='Schema')
+
 st_test  = st.sidebar.button('Test Connection')
 st.sidebar.title('')
 st.sidebar.caption('Created by: Igal Emoona (version 1.0)')
 
 
-
-
 with header:
-    col1, col2, = st.columns(2)
+    col1, col2, = st.columns([10,5])
 
     with col1:
         st.title("Snowflake CSV Loader ")
 
     with col2:
-        st.image(
-    "https://docs.snowflake.com/en/_images/logo-snowflake-sans-text.png",
-    width=100
-    )
+        st.image("https://docs.snowflake.com/en/_images/logo-snowflake-sans-text.png",width=60)
     
-    uploaded_file = st.file_uploader("Select your file")
+    ph_uploadfile = st.empty()
+    uploaded_file = ph_uploadfile.file_uploader("Select your file")
 
 if st_test:
     try:
@@ -57,34 +67,43 @@ if st_test:
                             schema = st_schema
                             ).cursor()
         snfClient.close()
-    except:
-        st.error(body='Unable to connect into Snowflake account')
-        print('Unable to connect into Snowflake account')
-        exit()
+    except snowflake.connector.errors.ProgrammingError as e:
+                    snf_error = 'Error {0} ({1}): \n{2} ({3})'.format(e.errno, e.sqlstate, e.msg, e.sfqid)
+                    st.error(body=snf_error)
+                    print(e.errno, e.msg, e.raw_msg, e.sqlstate, e.telemetry_msg)
+                    exit()
         
     st.success(body='Successfuly connected!')
     
     
 
 with body:
-
-    
     if uploaded_file is not None:
-        col1, col2, = st.columns(2)
+        col1, col, col2, col3= st.columns([3,2, 3,3])
 
         with col1:
             rows = st.number_input(label='Rows limit',value=3, min_value=1)
+        
+        with col2:
+            ddl = st.selectbox('DDL generator:',
+                                ('Create Only', 'Drop & Create', 'None'))
+        
+        with col3:
+            action = st.selectbox('Query Action:',
+                                ('Insert', 'Truncate & Insert'))
             
 
-        df = pd.read_csv(uploaded_file,encoding= 'unicode_escape')
+        df = pd.read_csv(uploaded_file,encoding= 'unicode_escape', low_memory=False)
         st.dataframe(data=df.head(int(rows)))
-        st.write('Total rows found:', len(df))
+        st.write('Total rows found:', '**{:,}**'.format(len(df)))
         col1, col2, = st.columns(2)
         with col1:
-            execute = st.button(label='Execute')
+            #execute = st.button(label='Execute')
+            placeholder = st.empty()
+            execute = placeholder.button('Execute')
         
         with col2:    
-            table = st.text_input(label='Tables name')
+            table = st.text_input(label='Tables name to be created:')
 
         types_map={'int64' : 'int',
                     'O' : 'varchar(255)',
@@ -92,11 +111,11 @@ with body:
                     'float64' : 'float'
                     }
 
-        char_to_replace = ['.', ')', '(', ' ', '^', '$', '#', '!', '@', '%', '&', '*', '-', '+', '=']
+        char_to_replace = ['.', ')', '(', ' ', '^', '$', '#', '!', '@', '%', '&', '*', '-', '+', '=','ï»']
 
         data = df.values.tolist()
         for i, row in enumerate(data):
-            data[i] = [str(r) for r in row]
+            data[i] = [str(r).strip() for r in row]
 
         # Covert data to string values
         values = ''
@@ -111,6 +130,8 @@ with body:
                     cname+='_'
                 else:
                     cname+=s
+            if len(set(cname)) == 1:
+                cname+='Field' + str(i)
             headers[i] = cname
             cname=''
 
@@ -127,52 +148,105 @@ with body:
             elif col_type == 'float64':
                 col_types.append(types_map['float64'])
 
-        
         columns_sql = [col + ' ' + ty for col,ty in zip(headers,col_types)]
 
-        sqlCreatetable = '''Create table {table} ({columns_sql});'''.format(table=table, columns_sql=','.join(columns_sql))
-    
         
         if execute and table != '':
+            placeholder.empty()
+            st_progressbar = st.progress(0)
             try:
                 snfClient = snowflake_connector(user=st_user,
-                password = st_password,
-                account=st_account,
-                region = st_region,
-                database = st_db,
-                schema = st_schema).cursor()
-                snfClient.execute(sqlCreatetable)
-            except:
-                st.error(body='Unable to connect into Snowflake account')
-                print('Unable to connect into Snowflake account')
-                #sqlSnowflake.close()
-                exit()
+                    password = st_password,
+                    account=st_account,
+                    region = st_region,
+                    database = st_db,
+                    schema = st_schema).cursor()
+            except snowflake.connector.errors.ProgrammingError as e:
+                    snf_error = 'Error {0} ({1}): \n{2} ({3})'.format(e.errno, e.sqlstate, e.msg, e.sfqid)
+                    st.error(body=snf_error)
+                    print(e.errno, e.msg, e.raw_msg, e.sqlstate, e.telemetry_msg)
+                    exit()
+            st_progressbar.progress(0 + 10)            
 
-            st.code(body=sqlCreatetable)
+            if 'create' in ddl.lower():
+                if 'drop' in ddl.lower():
+                    try:
+                        print('--------- DROP TABLE ----------')
+                        sqlDroptable = '''Drop table {table};'''.format(table=table)
+                        snfClient.execute(sqlDroptable)
+                        print('SQL statement:\n', sqlDroptable)
+                        #st.code(body=sqlDroptable)
+                    except snowflake.connector.errors.ProgrammingError as e:
+                        snf_error = 'Error {0} ({1}): {2} ({3})'.format(e.errno, e.sqlstate, e.msg, e.sfqid)
+                        st.error(body=snf_error)
+                        print(snf_error)
+                        exit()
+                
+                try:
+                    print('--------- CREATE TABLE ----------')
+                    sqlCreatetable = '''Create table {table} ({columns_sql});'''.format(table=table, columns_sql=','.join(columns_sql))
+                    snfClient.execute(sqlCreatetable)
+                    print('SQL statement:\n', sqlCreatetable)
+                    #st.code(body=sqlCreatetable)
+                except snowflake.connector.errors.ProgrammingError as e:
+                    print('SQL statement:\n', sqlCreatetable)
+                    snf_error = 'Error {0} ({1}): \n{2} ({3})'.format(e.errno, e.sqlstate, e.msg, e.sfqid)
+                    st.error(body=snf_error)
+                    print(e.errno, e.msg, e.raw_msg, e.sqlstate, e.telemetry_msg)
+                    exit()
+            st_progressbar.progress(0 + 10)
+
+            if 'truncate' in action.lower():
+                try:
+                    print('--------- TRUNCATE TABLE ----------')
+                    sqlTrunctable = '''Truncate table {table};'''.format(table=table)
+                    snfClient.execute(sqlTrunctable)
+                    print('SQL statement:\n', sqlTrunctable)
+                    #st.code(body=sqlTrunctable)
+                except snowflake.connector.errors.ProgrammingError as e:
+                    snf_error = 'Error {0} ({1}): \n{2} ({3})'.format(e.errno, e.sqlstate, e.msg, e.sfqid)
+                    st.error(body=snf_error)
+                    print(e.errno, e.msg, e.raw_msg, e.sqlstate, e.telemetry_msg)
+                    exit()
+
+            st_progressbar.progress(0 + 10)
+
             fieldsCount = len(headers)
             valuesString=str('%s,' * fieldsCount)[:-1:]
+
+            print('--------- INSERT into TABLE ----------')
             sqlInsert="Insert into {table} Values({valuesString});".format(table=table, valuesString=valuesString)
-            print('mysql stmt: ---------------\n', sqlInsert)
-            st.code(body=sqlInsert)
+            print('SQL statement:\n', sqlInsert)
+            #st.code(body=sqlInsert)
 
             dataSize = len(data)
-            for i in range(1,dataSize,16000-1):
-                if i!=1:
-                    end=i*2
+            bar_percent = round((dataSize / 16000))
+            if bar_percent == 0:
+                add_to_bar = 65
+            else:
+                add_to_bar = 30
+            print('=================', dataSize, bar_percent)
+            for i in range(0,dataSize,16000):
+                if i!=0:
+                    end=i+16000
                 else:
                     end=16000
                 dataBlock = data[i:end]
-                print('------------', i)
+                
+                print('------------ Block range:', i, end, '=', end-i)
 
                 try:
+                    st_progressbar.progress(0 + add_to_bar)
                     snfClient.executemany(sqlInsert, dataBlock)
-                except:
-                    st.error(body='Unable to connect into Snowflake account')
-                    print('Unable to connect into Snowflake account')
-                    #sqlSnowflake.close()
+                except snowflake.connector.errors.ProgrammingError as e:
+                    snf_error = 'Error {0} ({1}): \n{2} ({3})'.format(e.errno, e.sqlstate, e.msg, e.sfqid)
+                    st.error(body=snf_error)
+                    print(e.errno, e.msg, e.raw_msg, e.sqlstate, e.telemetry_msg)
                     exit()
-            
-            st.success('Data loaded into Snowflake!')
-            st.balloons()
+                add_to_bar+=10
+            st_progressbar.progress(100)
+            st_progressbar.empty()
+            st.success('You file loaded into Snowflake!')
+            st.snow()
             execute=False
             snfClient.close()
