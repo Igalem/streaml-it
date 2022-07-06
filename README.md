@@ -3,13 +3,18 @@
 </p>
 
 <p align="center" width="100%">
-  <img src="_static/snowflake_csv_loader.jpg" height="350">
+  <img src="_static/snowflake_csv_loader.jpg" height="600">
 </p>
 
 # Streaml-it
 Streamlit applications project
 
 Dynamic CSV -> Snowflake loader applicattion
+
+- Dynamicly create / replace target tables names and structure for your content
+- [Insert] or [Truncate & insert] actions to manage your data
+- Snowflake connection testing & Error handling
+- 200Mb limitation for supporting your source file
 
 ## Getting started
 
@@ -22,7 +27,7 @@ streamlit run main.py
 
 ```
 
-You just ran the CSV loader application!! 🎉
+Congratulations!! 👏🏼 You just ran the CSV loader application!! 🎉
 
 Check out the terminal log ``output`` while running the app.
 

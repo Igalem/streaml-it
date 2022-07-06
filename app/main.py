@@ -78,7 +78,7 @@ if st_test:
     
 
 with body:
-    if uploaded_file is not None:
+    if uploaded_file:
         col1, col, col2, col3= st.columns([3,2, 3,3])
 
         with col1:
@@ -91,9 +91,14 @@ with body:
         with col3:
             action = st.selectbox('Query Action:',
                                 ('Insert', 'Truncate & Insert'))
-            
-
-        df = pd.read_csv(uploaded_file,encoding= 'unicode_escape', low_memory=False)
+        
+        
+        #@st.cache(suppress_st_warning=True)
+        def read_uploaded_file(uploaded_file=uploaded_file):
+            data_frame = pd.read_csv(uploaded_file,encoding= 'unicode_escape', low_memory=False)
+            return data_frame
+        
+        df = read_uploaded_file(uploaded_file=uploaded_file)
         st.dataframe(data=df.head(int(rows)))
         st.write('Total rows found:', '**{:,}**'.format(len(df)))
         col1, col2, = st.columns(2)
@@ -111,7 +116,8 @@ with body:
                     'float64' : 'float'
                     }
 
-        char_to_replace = ['.', ')', '(', ' ', '^', '$', '#', '!', '@', '%', '&', '*', '-', '+', '=','ï»']
+        char_to_replace = ['.', ')', '(', '/', ';', ' ', '^', '$', '#', '!', '@', '%', '&', '*', '-', '+', '=','ï»',
+        '"', ':', '|', '[', ']', '{', '}', '±', '~', '§', '?', '<', '>']
 
         data = df.values.tolist()
         for i, row in enumerate(data):
@@ -222,9 +228,12 @@ with body:
             dataSize = len(data)
             bar_percent = round((dataSize / 16000))
             if bar_percent == 0:
-                add_to_bar = 65
+                add_to_bar = 0
+                bar_progress = 65
             else:
-                add_to_bar = 30
+                bar_progress = 30
+                add_to_bar = round((95 - bar_progress) / bar_percent)
+
             print('=================', dataSize, bar_percent)
             for i in range(0,dataSize,16000):
                 if i!=0:
@@ -233,17 +242,17 @@ with body:
                     end=16000
                 dataBlock = data[i:end]
                 
-                print('------------ Block range:', i, end, '=', end-i)
+                print('------------ Block range:', i, end, '=', end-i, 'bar_progress=',bar_progress,'add_to_bar=', add_to_bar )
 
                 try:
-                    st_progressbar.progress(0 + add_to_bar)
+                    st_progressbar.progress(bar_progress)
                     snfClient.executemany(sqlInsert, dataBlock)
                 except snowflake.connector.errors.ProgrammingError as e:
                     snf_error = 'Error {0} ({1}): \n{2} ({3})'.format(e.errno, e.sqlstate, e.msg, e.sfqid)
                     st.error(body=snf_error)
                     print(e.errno, e.msg, e.raw_msg, e.sqlstate, e.telemetry_msg)
                     exit()
-                add_to_bar+=10
+                bar_progress+=add_to_bar
             st_progressbar.progress(100)
             st_progressbar.empty()
             st.success('You file loaded into Snowflake!')
