@@ -1,8 +1,9 @@
-
 import streamlit as st
 import pandas as pd
 import snowflake.connector
 
+app_version = '2.1v'
+DATAFRAME_ROW_LIMIT = 3
 
 def snowflake_connector(user, password, account, region, database, schema):
     snowflakeClient = snowflake.connector.connect(
@@ -42,7 +43,7 @@ st_schema  = st.sidebar.text_input('', placeholder='Schema')
 
 st_test  = st.sidebar.button('Test Connection')
 st.sidebar.title('')
-st.sidebar.caption('Created by: Igal Emoona (version 1.0)')
+st.sidebar.caption('Created by: Igal Emoona (version {app_version})'.format(app_version=app_version))
 
 
 with header:
@@ -79,31 +80,45 @@ if st_test:
 
 with body:
     if uploaded_file:
-        col1, col, col2, col3= st.columns([3,2, 3,3])
+        col1, col2, col3, col4= st.columns([3,2, 3,3])
 
         with col1:
-            rows = st.number_input(label='Rows limit',value=3, min_value=1)
-        
+            rows = st.number_input(label='Rows limit',value=DATAFRAME_ROW_LIMIT, min_value=1)
+
         with col2:
+            fileHeaders = st.selectbox('Headers:',
+                                ('Yes', 'No')) 
+        
+        with col3:
             ddl = st.selectbox('DDL generator:',
                                 ('Create Only', 'Drop & Create', 'None'))
         
-        with col3:
+        with col4:
             action = st.selectbox('Query Action:',
                                 ('Insert', 'Truncate & Insert'))
         
         
         #@st.cache(suppress_st_warning=True)
         def read_uploaded_file(uploaded_file=uploaded_file):
-            data_frame = pd.read_csv(uploaded_file,encoding= 'unicode_escape', low_memory=False)
+            try:
+                uploaded_file_type = str(uploaded_file).split(',')[1]
+                if '.txt' in uploaded_file_type.lower():
+                    data_frame = pd.read_csv(uploaded_file, encoding='utf-16', sep='\t', low_memory=False)
+                else:
+                    data_frame = pd.read_csv(uploaded_file, encoding='unicode_escape', low_memory=False)
+            except:
+                pass
+            
             return data_frame
         
         df = read_uploaded_file(uploaded_file=uploaded_file)
-        st.dataframe(data=df.head(int(rows)))
+        placeholderDataframe = st.empty()
+        dataframe = placeholderDataframe.dataframe(data=df.head(DATAFRAME_ROW_LIMIT))
+        
+        # st.dataframe(data=df.head(int(rows)))
         st.write('Total rows found:', '**{:,}**'.format(len(df)))
         col1, col2, = st.columns(2)
         with col1:
-            #execute = st.button(label='Execute')
             placeholder = st.empty()
             execute = placeholder.button('Execute')
         
@@ -136,10 +151,14 @@ with body:
                     cname+='_'
                 else:
                     cname+=s
-            if len(set(cname)) == 1:
-                cname+='Field' + str(i)
+            if len(set(cname)) == 1 or fileHeaders.lower() != "yes":
+                cname='Field' + str(i)
+            
             headers[i] = cname
             cname=''
+            
+
+
 
         df_types = df.dtypes.tolist()
         col_types = []
@@ -155,8 +174,12 @@ with body:
                 col_types.append(types_map['float64'])
 
         columns_sql = [col + ' ' + ty for col,ty in zip(headers,col_types)]
-
         
+        if fileHeaders == "No":
+            df.columns = headers
+            dataframe = placeholderDataframe.dataframe(data=df.head(DATAFRAME_ROW_LIMIT))
+            
+
         if execute and table != '':
             placeholder.empty()
             st_progressbar = st.progress(0)
