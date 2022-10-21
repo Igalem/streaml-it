@@ -1,3 +1,4 @@
+from email.header import Header
 import streamlit as st
 import pandas as pd
 import snowflake.connector
@@ -87,7 +88,7 @@ with body:
 
         with col2:
             fileHeaders = st.selectbox('Headers:',
-                                ('Yes', 'No')) 
+                                ('No', 'Yes')) 
         
         with col3:
             ddl = st.selectbox('DDL generator:',
@@ -103,16 +104,19 @@ with body:
             try:
                 uploaded_file_type = str(uploaded_file).split(',')[1]
                 if '.txt' in uploaded_file_type.lower():
-                    data_frame = pd.read_csv(uploaded_file, encoding='utf-16', sep='\t', low_memory=False)
+                    data_frame = pd.read_csv(uploaded_file, encoding='utf-16', sep='\t', low_memory=False, header=None)
                 else:
-                    data_frame = pd.read_csv(uploaded_file, encoding='unicode_escape', low_memory=False)
+                    data_frame = pd.read_csv(uploaded_file, encoding='unicode_escape', low_memory=False, header=None)
             except:
                 pass
             
             return data_frame
         
-        df = read_uploaded_file(uploaded_file=uploaded_file)
+        orig_df = df = read_uploaded_file(uploaded_file=uploaded_file)
         df = df.fillna('')
+        ## Generate general Headers
+        df.columns = ['Filed' + str(h) for h in range(len(df.columns))]
+
         placeholderDataframe = st.empty()
         placeholderDataframe.dataframe(data=df.head(DATAFRAME_ROW_LIMIT))
         
@@ -135,7 +139,15 @@ with body:
         char_to_replace = ['.', ')', '(', '/', ';', ' ', '^', '$', '#', '!', '@', '%', '&', '*', '-', '+', '=','ï»',
         '"', ':', '|', '[', ']', '{', '}', '±', '~', '§', '?', '<', '>']
 
-        data = df.values.tolist()
+        if fileHeaders == "No":
+            data = df.values.tolist()
+        else:
+            headers = df.values.tolist()[0]
+            df = df.iloc[1::]
+            data = df.values.tolist()
+            df.columns = headers
+            placeholderDataframe.dataframe(data=df.head(DATAFRAME_ROW_LIMIT))
+
         for i, row in enumerate(data):
             data[i] = [str(r).strip() for r in row]
 
@@ -157,9 +169,6 @@ with body:
             
             headers[i] = cname
             cname=''
-            
-
-
 
         df_types = df.dtypes.tolist()
         col_types = []
@@ -178,11 +187,6 @@ with body:
         
         if rows:
             DATAFRAME_ROW_LIMIT = rows
-            placeholderDataframe.dataframe(data=df.head(DATAFRAME_ROW_LIMIT))
-
-        
-        if fileHeaders == "No":
-            df.columns = headers
             placeholderDataframe.dataframe(data=df.head(DATAFRAME_ROW_LIMIT))
 
 
@@ -252,9 +256,9 @@ with body:
             print('--------- INSERT into TABLE ----------')
             sqlInsert="Insert into {table} Values({valuesString});".format(table=table, valuesString=valuesString)
             print('SQL statement:\n', sqlInsert)
-            #st.code(body=sqlInsert)
 
             dataSize = len(data)
+            print("dataSize:",dataSize)
             bar_percent = round((dataSize / 16000))
             if bar_percent == 0:
                 add_to_bar = 0
