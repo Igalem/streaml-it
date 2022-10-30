@@ -1,7 +1,8 @@
-from email.header import Header
-import streamlit as st
+import csv
+
 import pandas as pd
 import snowflake.connector
+import streamlit as st
 
 app_version = '2.1v'
 DATAFRAME_ROW_LIMIT = 2
@@ -102,9 +103,10 @@ with body:
         #@st.cache(suppress_st_warning=True)
         def read_uploaded_file(uploaded_file=uploaded_file):
             try:
+                data_frame=''
                 uploaded_file_type = str(uploaded_file).split(',')[1]
                 if '.txt' in uploaded_file_type.lower():
-                    data_frame = pd.read_csv(uploaded_file, encoding='utf-16', sep='\t', low_memory=False, header=None)
+                    data_frame = pd.read_csv(uploaded_file, encoding='utf-16', quoting=csv.QUOTE_NONE, sep='\t', low_memory=False, header=None)
                 else:
                     data_frame = pd.read_csv(uploaded_file, encoding='unicode_escape', low_memory=False, header=None)
             except:
