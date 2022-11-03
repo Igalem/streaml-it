@@ -1,11 +1,13 @@
 import csv
-
+import tempfile
 import pandas as pd
 import snowflake.connector
 import streamlit as st
+import os
 
-app_version = '2.1v'
-DATAFRAME_ROW_LIMIT = 2
+app_version = '3.0v'
+DATAFRAME_ROW_LIMIT = 3
+
 
 def snowflake_connector(user, password, account, region, database, schema):
     snowflakeClient = snowflake.connector.connect(
@@ -27,7 +29,7 @@ st.set_page_config(
      menu_items={
          'Get Help': 'https://github.com/Igalem/streaml-it',
          'Report a bug': "https://github.com/Igalem/streaml-it",
-         'About': "# CSV Loader to Snowflake *\n*Use this app to load your CSV file into Snowflake DB.*"
+         'About': f"# CSV Loader to Snowflake *\nApplication version {app_version} by igal emona\n\nUse this app to load your CSV file into Snowflake DB."
      }
  )
 
@@ -102,20 +104,61 @@ with body:
         
         #@st.cache(suppress_st_warning=True)
         def read_uploaded_file(uploaded_file=uploaded_file):
+            global uploaded_temp_file
+
+            print('uploaded_file:', uploaded_file.name)
+            if 'txt' in uploaded_file.name.lower():
+                temp_file_suffix = 'txt'
+            else:
+                temp_file_suffix = 'csv'
+
+            temp_file = tempfile.NamedTemporaryFile(delete=False,suffix=f".{temp_file_suffix}")
+            temp_file.write(uploaded_file.getbuffer())
+            uploaded_temp_file=temp_file.name
+
             try:
                 data_frame=''
-                uploaded_file_type = str(uploaded_file).split(',')[1]
-                if '.txt' in uploaded_file_type.lower():
-                    data_frame = pd.read_csv(uploaded_file, encoding='utf-16', quoting=csv.QUOTE_NONE, sep='\t', low_memory=False, header=None)
+                uploaded_file_type = uploaded_temp_file
+                if '.txt' in uploaded_temp_file.lower():
+                    try:
+                        print('Trying to load TXT with no encoding dataframe:', uploaded_file_type)
+                        data_frame = pd.read_csv(uploaded_temp_file, quoting=csv.QUOTE_NONE, sep='\t', low_memory=False, header=None)
+                    except:
+                        pass
+                    
+                    if len(data_frame) < 1:
+                        try:
+                            print('Trying to load TXT with UTF-16 encoding dataframe:', uploaded_file_type)
+                            data_frame = pd.read_csv(uploaded_temp_file, encoding='utf-16', quoting=csv.QUOTE_NONE, sep='\t', low_memory=False, header=None)                            
+                        except:
+                            pass
+                        
                 else:
-                    data_frame = pd.read_csv(uploaded_file, encoding='unicode_escape', low_memory=False, header=None)
+                    try:
+                        print('Trying to load CSV dataframe:', uploaded_file_type)
+                        data_frame = pd.read_csv(uploaded_temp_file, low_memory=False, header=None)
+                    except:
+                        try:
+                            print('Trying to load CSV with UNICODE encoding dataframe:', uploaded_file_type)
+                            data_frame = pd.read_csv(uploaded_temp_file, encoding='unicode_escape', low_memory=False, header=None)
+                        except:
+                            pass
             except:
                 pass
-            
             return data_frame
         
         orig_df = df = read_uploaded_file(uploaded_file=uploaded_file)
-        df = df.fillna('')
+
+        try:
+            df = df.fillna('')
+            print('----->\n', df)
+        except:
+            st.exception('ERR: Cant read uploaded file') 
+            exit
+        finally:
+            os.remove(uploaded_temp_file)
+
+        
         ## Generate general Headers
         df.columns = ['Filed' + str(h) for h in range(len(df.columns))]
 
