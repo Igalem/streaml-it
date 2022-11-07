@@ -7,7 +7,9 @@ import os
 
 app_version = '3.1v'
 DATAFRAME_ROW_LIMIT = 2
-tempdir = '/Users/igale/vsCode/streaml-it/temp'
+ROOT_DIR = os.path.realpath(os.path.pardir)
+
+tempdir = f"{ROOT_DIR}/temp"
 
 
 def snowflake_connector(user, password, account, region, database, schema):
