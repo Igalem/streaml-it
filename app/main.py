@@ -5,8 +5,9 @@ import snowflake.connector
 import streamlit as st
 import os
 
-app_version = '3.0v'
-DATAFRAME_ROW_LIMIT = 3
+app_version = '3.1v'
+DATAFRAME_ROW_LIMIT = 2
+tempdir = '/Users/igale/vsCode/streaml-it/temp'
 
 
 def snowflake_connector(user, password, account, region, database, schema):
@@ -60,7 +61,7 @@ with header:
         st.image("https://docs.snowflake.com/en/_images/logo-snowflake-sans-text.png",width=60)
     
     ph_uploadfile = st.empty()
-    uploaded_file = ph_uploadfile.file_uploader("Select your file")
+    uploaded_file = ph_uploadfile.file_uploader("Select your file", type=['txt', 'csv'])
 
 if st_test:
     try:
@@ -105,41 +106,40 @@ with body:
         #@st.cache(suppress_st_warning=True)
         def read_uploaded_file(uploaded_file=uploaded_file):
             global uploaded_temp_file
+            
+            print('\n\n')
+            print(f"log: Uploaded filename: {uploaded_file.name}")
 
-            print('uploaded_file:', uploaded_file.name)
-            if 'txt' in uploaded_file.name.lower():
-                temp_file_suffix = 'txt'
-            else:
-                temp_file_suffix = 'csv'
+            uploaded_filename = uploaded_file.name
+            uploaded_temp_file = tempdir + '/' + uploaded_filename
 
-            temp_file = tempfile.NamedTemporaryFile(delete=False,suffix=f".{temp_file_suffix}")
-            temp_file.write(uploaded_file.getbuffer())
-            uploaded_temp_file=temp_file.name
+            with open(os.path.join(tempdir,uploaded_filename),"wb") as f:
+                f.write(uploaded_file.getbuffer())
 
             try:
                 data_frame=''
-                uploaded_file_type = uploaded_temp_file
+                
                 if '.txt' in uploaded_temp_file.lower():
                     try:
-                        print('Trying to load TXT with no encoding dataframe:', uploaded_file_type)
+                        print(f"log: trying to load TXT with no encoding dataframe: {uploaded_temp_file}")
                         data_frame = pd.read_csv(uploaded_temp_file, quoting=csv.QUOTE_NONE, sep='\t', low_memory=False, header=None)
                     except:
                         pass
                     
                     if len(data_frame) < 1:
                         try:
-                            print('Trying to load TXT with UTF-16 encoding dataframe:', uploaded_file_type)
+                            print(f"log: trying to load TXT with UTF-16 encoding dataframe: {uploaded_temp_file}")
                             data_frame = pd.read_csv(uploaded_temp_file, encoding='utf-16', quoting=csv.QUOTE_NONE, sep='\t', low_memory=False, header=None)                            
                         except:
                             pass
                         
-                else:
+                elif '.csv' in uploaded_temp_file.lower():
                     try:
-                        print('Trying to load CSV dataframe:', uploaded_file_type)
+                        print(f"log: trying to load CSV dataframe: {uploaded_temp_file}")
                         data_frame = pd.read_csv(uploaded_temp_file, low_memory=False, header=None)
                     except:
                         try:
-                            print('Trying to load CSV with UNICODE encoding dataframe:', uploaded_file_type)
+                            print(f"log: trying to load CSV with UNICODE encoding dataframe: {uploaded_temp_file}")
                             data_frame = pd.read_csv(uploaded_temp_file, encoding='unicode_escape', low_memory=False, header=None)
                         except:
                             pass
@@ -147,17 +147,17 @@ with body:
                 pass
             return data_frame
         
-        orig_df = df = read_uploaded_file(uploaded_file=uploaded_file)
+        df = read_uploaded_file(uploaded_file=uploaded_file)
 
         try:
             df = df.fillna('')
-            print('----->\n', df)
+            print(f"log: NaN values cleared from dataframe")
         except:
-            st.exception('ERR: Cant read uploaded file') 
-            exit
+            st.exception(f'error: Cant read uploaded file: \n\n {uploaded_file}')
+            pass
         finally:
             os.remove(uploaded_temp_file)
-
+            print(f"log: temporary file: {uploaded_temp_file} deleted from repository.")
         
         ## Generate general Headers
         df.columns = ['Filed' + str(h) for h in range(len(df.columns))]
