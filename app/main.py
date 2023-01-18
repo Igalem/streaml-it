@@ -25,16 +25,16 @@ def snowflake_connector(user, password, account, region, database, schema):
 
 # ===================================================== Streamlit Configuration
 st.set_page_config(
-     page_title="Snowflake File Loader",
-     page_icon="🧊",
-     layout="centered",
-     initial_sidebar_state="expanded",
-     menu_items={
-         'Get Help': 'https://github.com/Igalem/streaml-it',
-         'Report a bug': "https://github.com/Igalem/streaml-it",
-         'About': f"# CSV Loader to Snowflake *\nApplication version {app_version} by igal emona\n\nUse this app to load your CSV file into Snowflake DB."
-     }
- )
+    page_title="Snowflake File Loader",
+    page_icon="🧊",
+    layout="centered",
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': 'https://github.com/Igalem/streaml-it',
+        'Report a bug': "https://github.com/Igalem/streaml-it",
+        'About': f"# CSV Loader to Snowflake *\nApplication version {app_version} by igal emona\n\nUse this app to load your CSV file into Snowflake DB."
+    }
+)
 
 header = st.container()
 body = st.container()
@@ -51,6 +51,7 @@ st_schema  = st.sidebar.text_input('', placeholder='Schema')
 st_test  = st.sidebar.button('Test Connection')
 st.sidebar.title('')
 st.sidebar.caption('Created by: Igal Emoona (version {app_version})'.format(app_version=app_version))
+df = pd.DataFrame()
 
 
 with header:
@@ -63,7 +64,7 @@ with header:
         st.image("https://docs.snowflake.com/en/_images/logo-snowflake-sans-text.png",width=60)
     
     ph_uploadfile = st.empty()
-    uploaded_file = ph_uploadfile.file_uploader("Select your file", type=['txt', 'csv'])
+    uploaded_files = ph_uploadfile.file_uploader("Select your file", type=['txt', 'csv'], accept_multiple_files=True)
 
 if st_test:
     try:
@@ -86,7 +87,10 @@ if st_test:
     
 
 with body:
-    if uploaded_file:
+    if uploaded_files:
+
+        
+
         col1, col2, col3, col4= st.columns([3,2, 3,3])
 
         with col1:
@@ -106,10 +110,11 @@ with body:
         
         
         #@st.cache(suppress_st_warning=True)
-        def read_uploaded_file(uploaded_file=uploaded_file):
+        def read_uploaded_file(uploaded_file, ignore_header=False):
             global uploaded_temp_file
             
             print('\n\n')
+            print('---------------', uploaded_files)
             print(f"log: Uploaded filename: {uploaded_file.name}")
 
             uploaded_filename = uploaded_file.name
@@ -149,7 +154,19 @@ with body:
                 pass
             return data_frame
         
-        df = read_uploaded_file(uploaded_file=uploaded_file)
+        ## Call function for create dataframe from file
+        for i,uploaded_file in enumerate(uploaded_files):
+            print(f'*** {i} *****', uploaded_file)
+            if i==0:
+                ignore_header = False
+            else:
+                ignore_header = True
+
+            dataframe = read_uploaded_file(uploaded_file=uploaded_file, ignore_header=ignore_header)
+            print(len(dataframe))
+            df = pd.concat([df, dataframe], ignore_index=True)
+            
+
 
         try:
             df = df.fillna('')
@@ -178,7 +195,7 @@ with body:
             table = st.text_input(label='Tables name to be created:')
 
         types_map={'int64' : 'int',
-                    'O' : 'varchar(255)',
+                    'O' : 'string', ##'varchar(255)',
                     'bool' : 'boolean',
                     'float64' : 'float'
                     }
